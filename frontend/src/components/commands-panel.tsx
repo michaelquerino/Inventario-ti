@@ -17,6 +17,7 @@ import {
   type RemoteCommand,
 } from "@/lib/commands-api";
 import type { MonitoringItem } from "@/lib/monitoring-api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type CommandsPanelProps = {
   monitoringItems: MonitoringItem[];
@@ -213,6 +214,9 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
   const [certEscopo, setCertEscopo] = useState<"CurrentUser" | "LocalMachine">("CurrentUser");
   const [senhaPfx, setSenhaPfx] = useState("");
   const [processandoArquivo, setProcessandoArquivo] = useState(false);
+  const [confirmacaoEnvio, setConfirmacaoEnvio] = useState<{ comandoTexto: string; agendadoIso?: string } | null>(
+    null,
+  );
 
   const arquivoEhPfx = useMemo(() => {
     if (!arquivoEscolhido) return false;
@@ -384,6 +388,13 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
     });
   }, [monitoringItems, filtro, displayNames]);
 
+  const nomesSelecionadosResumo = useMemo(() => {
+    const nomes = Array.from(selecionados).map((serie) => displayNames[serie] || serie);
+    const LIMITE = 4;
+    if (nomes.length <= LIMITE) return nomes.join(", ");
+    return `${nomes.slice(0, LIMITE).join(", ")} e mais ${nomes.length - LIMITE}`;
+  }, [selecionados, displayNames]);
+
   const todosFiltradosSelecionados =
     notebooksFiltrados.length > 0 && notebooksFiltrados.every((item) => selecionados.has(item.numero_serie));
 
@@ -495,7 +506,7 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
     );
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErro("");
     setSucesso("");
@@ -514,17 +525,26 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
       return;
     }
 
+    const agendadoIso = agendar && agendadoPara ? new Date(agendadoPara).toISOString() : undefined;
+    setConfirmacaoEnvio({ comandoTexto, agendadoIso });
+  }
+
+  async function handleConfirmarEnvio() {
+    if (!confirmacaoEnvio) return;
+    const { comandoTexto, agendadoIso } = confirmacaoEnvio;
+
     setEnviando(true);
     try {
-      const agendadoIso = agendar && agendadoPara ? new Date(agendadoPara).toISOString() : undefined;
       await createCommand(Array.from(selecionados), comandoTexto, agendadoIso, modo);
       setSucesso(
         `Comando enviado para ${selecionados.size} notebook(s)${agendadoIso ? ", agendado" : ""}${modo === "admin" ? " — modo administrador" : ""}.`,
       );
       setComando("");
+      setConfirmacaoEnvio(null);
       await refreshHistorico();
     } catch (err) {
       setErro(err instanceof Error ? err.message : "Erro ao enviar comando");
+      setConfirmacaoEnvio(null);
     } finally {
       setEnviando(false);
     }
@@ -840,6 +860,46 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
           </div>
         </form>
       </section>
+
+      <ConfirmDialog
+        open={confirmacaoEnvio !== null}
+        tone={modo === "admin" ? "danger" : "default"}
+        title={
+          modo === "admin"
+            ? `Executar como Administrador em ${selecionados.size} notebook(s)?`
+            : `Executar comando em ${selecionados.size} notebook(s)?`
+        }
+        confirmLabel={enviando ? "Enviando..." : "Sim, executar"}
+        confirming={enviando}
+        onCancel={() => setConfirmacaoEnvio(null)}
+        onConfirm={() => void handleConfirmarEnvio()}
+        description={
+          confirmacaoEnvio ? (
+            <div className="space-y-2">
+              {modo === "admin" ? (
+                <p className="font-medium text-red-700">
+                  Este comando roda com privilégio total (SYSTEM) — sem sandbox, sem confirmação do usuário do
+                  notebook.
+                </p>
+              ) : null}
+              <p>
+                Destino:{" "}
+                {nomesSelecionadosResumo}
+              </p>
+              <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-100 px-2 py-1.5 font-mono text-xs text-slate-700">
+                {confirmacaoEnvio.comandoTexto}
+              </pre>
+              {confirmacaoEnvio.agendadoIso ? (
+                <p className="text-xs text-slate-500">
+                  Agendado para {new Date(confirmacaoEnvio.agendadoIso).toLocaleString("pt-BR")}.
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">Roda no próximo checkin do agente (até ~1 minuto).</p>
+              )}
+            </div>
+          ) : null
+        }
+      />
 
       <section className="min-w-0 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
