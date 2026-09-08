@@ -576,6 +576,8 @@ export default function HomePage() {
                     setActiveSection("monitoring");
                     setActiveTab("monitoring");
                   }}
+                  title="Monitoramento"
+                  aria-label="Monitoramento"
                   className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500"
                 >
                   <Bell className="h-4 w-4" />
@@ -584,6 +586,8 @@ export default function HomePage() {
                   onClick={() => {
                     setActiveSection("settings");
                   }}
+                  title="Configurações"
+                  aria-label="Configurações"
                   className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500"
                 >
                   <Settings className="h-4 w-4" />
@@ -601,6 +605,7 @@ export default function HomePage() {
                   onClick={handleLogout}
                   className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-slate-500"
                   title="Sair"
+                  aria-label="Sair"
                 >
                   <UserCircle2 className="h-6 w-6" />
                 </button>

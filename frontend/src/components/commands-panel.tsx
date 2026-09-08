@@ -609,6 +609,7 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
                 onClick={() => void handleExcluirTemplateSelecionado()}
                 disabled={!templateSelecionadoId}
                 title="Excluir comando selecionado da biblioteca"
+                aria-label="Excluir comando selecionado da biblioteca"
                 className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -780,14 +781,14 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
             <span className="text-sm text-slate-700">Executar como</span>
             <div className="flex flex-wrap gap-2">
               <label
-                className={`flex flex-1 cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 text-sm ${
+                className={`flex flex-1 cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
                   modo === "usuario" ? "border-brand-500 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600"
                 }`}
               >
                 <input
                   type="radio"
                   name="modo-execucao"
-                  className="hidden"
+                  className="sr-only"
                   checked={modo === "usuario"}
                   onChange={() => setModo("usuario")}
                 />
@@ -797,14 +798,14 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
                 </span>
               </label>
               <label
-                className={`flex flex-1 cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 text-sm ${
+                className={`flex flex-1 cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-amber-500 focus-within:ring-offset-2 ${
                   modo === "admin" ? "border-amber-500 bg-amber-50 text-amber-800" : "border-slate-200 text-slate-600"
                 }`}
               >
                 <input
                   type="radio"
                   name="modo-execucao"
-                  className="hidden"
+                  className="sr-only"
                   checked={modo === "admin"}
                   onChange={() => setModo("admin")}
                 />
@@ -1007,6 +1008,7 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
                         onClick={() => void handleExcluirComando(cmd)}
                         disabled={excluindoId === cmd.id}
                         title="Excluir comando pendente"
+                        aria-label="Excluir comando pendente"
                         className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1018,6 +1020,7 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
                         onClick={() => void handleCancelarComando(cmd)}
                         disabled={cancelandoId === cmd.id}
                         title="Cancelar comando preso em execução"
+                        aria-label="Cancelar comando preso em execução"
                         className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
                       >
                         <Ban className="h-3.5 w-3.5" />

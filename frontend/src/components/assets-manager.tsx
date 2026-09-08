@@ -366,6 +366,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
                       <button
                         onClick={() => openEditModal(asset, true)}
                         title="Visualizar sem editar"
+                        aria-label={`Visualizar ${asset.name}`}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
                       >
                         <Search className="h-3.5 w-3.5" />
@@ -373,6 +374,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
                       <button
                         onClick={() => openEditModal(asset)}
                         title="Editar"
+                        aria-label={`Editar ${asset.name}`}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -381,6 +383,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
                         onClick={() => handleDelete(asset)}
                         disabled={deletingId === asset.id}
                         title={deletingId === asset.id ? "Excluindo..." : "Excluir"}
+                        aria-label={deletingId === asset.id ? `Excluindo ${asset.name}` : `Excluir ${asset.name}`}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
