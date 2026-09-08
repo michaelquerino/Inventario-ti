@@ -128,6 +128,7 @@ export default function HomePage() {
   const [resolvingAllAudits, setResolvingAllAudits] = useState(false);
   const [uiSettings, setUiSettings] = useState<UiSettings>(defaultUiSettings);
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ role: "viewer" });
+  const [authStatus, setAuthStatus] = useState<"checking" | "authenticated">("checking");
   const [summary, setSummary] = useState<DashboardSummary>({
     total_assets: 0,
     cloud_assets: 0,
@@ -236,6 +237,7 @@ export default function HomePage() {
         }
         const payload = (await response.json()) as CurrentUser;
         setCurrentUser({ role: payload.role || "viewer" });
+        setAuthStatus("authenticated");
       } catch {
         clearToken();
         router.push("/login");
@@ -247,6 +249,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (authStatus !== "authenticated") return;
     void refreshOperationalData();
     const timer = window.setInterval(() => {
       void refreshOperationalData();
@@ -255,11 +258,12 @@ export default function HomePage() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [refreshOperationalData]);
+  }, [refreshOperationalData, authStatus]);
 
   useEffect(() => {
+    if (authStatus !== "authenticated") return;
     void refreshSummary();
-  }, [refreshSummary]);
+  }, [refreshSummary, authStatus]);
 
   const stats = useMemo(
     () => [
@@ -448,6 +452,17 @@ export default function HomePage() {
     }
 
     return <AssetsManager externalQuery={headerQuery} />;
+  }
+
+  if (authStatus === "checking") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-100">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600" />
+          <p className="text-sm">Verificando sessão...</p>
+        </div>
+      </main>
+    );
   }
 
   return (
