@@ -1,10 +1,8 @@
-import sqlite3
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.legacy_db import legacy_db_path as _legacy_db_path
 from app.models.asset import Asset
+from app.models.legacy import Ativo
 from app.schemas.asset import AssetCreate, AssetUpdate
 
 
@@ -33,41 +31,23 @@ def _build_asset_tag(legacy_id: int, patrimonio: str | None, serial_number: str 
 
 
 def sync_assets_from_legacy_database(db: Session) -> None:
-    """Importa ativos legados (ativos.db) para a tabela da API sem duplicar registros."""
-    legacy_db = _legacy_db_path()
-    if not legacy_db.exists():
-        return
+    """Importa ativos legados (tabela 'ativos') para a tabela da API sem
+    duplicar registros. Usa a mesma sessão/conexão de 'assets' -- ambas as
+    tabelas vivem no mesmo arquivo físico (inventario.db), então isso deixou
+    de ser uma leitura cross-connection via sqlite3 cru."""
+    ativos_legados = db.scalars(select(Ativo).order_by(Ativo.id)).all()
 
-    with sqlite3.connect(legacy_db) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, nome, categoria, numero_serie, status, responsavel, localizacao,
-                   observacoes, patrimonio, usuario, modelo_monitor, patrimonio_monitor
-            FROM ativos
-            ORDER BY id ASC
-            """
-        )
-        rows = cursor.fetchall()
-
-    for row in rows:
-        (
-            legacy_id,
-            nome,
-            categoria,
-            numero_serie,
-            status,
-            responsavel,
-            localizacao,
-            observacoes,
-            patrimonio,
-            usuario,
-            modelo_monitor,
-            patrimonio_monitor,
-        ) = row
+    for ativo in ativos_legados:
+        legacy_id = ativo.id
+        numero_serie = ativo.numero_serie
+        status = ativo.status
+        patrimonio = ativo.patrimonio
+        usuario = ativo.usuario
+        modelo_monitor = ativo.modelo_monitor
+        patrimonio_monitor = ativo.patrimonio_monitor
 
         serial = (numero_serie or "").strip() or None
-        owner = (usuario or "").strip() or (responsavel or "").strip() or None
+        owner = (usuario or "").strip() or (ativo.responsavel or "").strip() or None
         asset_tag = _build_asset_tag(legacy_id, patrimonio, serial)
 
         existing = None
@@ -100,16 +80,16 @@ def sync_assets_from_legacy_database(db: Session) -> None:
                 Asset(
                     asset_tag=asset_tag,
                     screen_asset_tag=(patrimonio_monitor or None),
-                    name=nome or f"Ativo legado {legacy_id}",
-                    category=(categoria or None),
+                    name=ativo.nome or f"Ativo legado {legacy_id}",
+                    category=(ativo.categoria or None),
                     status=_normalize_status(status),
                     serial_number=serial,
                     brand=None,
                     model=(modelo_monitor or None),
-                    location=(localizacao or None),
+                    location=(ativo.localizacao or None),
                     owner=owner,
                     department=None,
-                    notes=(observacoes or None),
+                    notes=(ativo.observacoes or None),
                 )
             )
             # A sessão roda com autoflush=False (veja app/db/session.py), então sem
@@ -190,23 +170,20 @@ def update_asset(db: Session, asset: Asset, payload: AssetUpdate) -> Asset:
     return asset
 
 
-def _delete_from_legacy_database(asset: Asset) -> None:
-    """Remove o registro correspondente em ativos.db -- sem isso, a próxima
-    sync_assets_from_legacy_database() (chamada em todo list_assets()) recria
-    o ativo excluído, porque ele ainda existe na origem legada."""
-    legacy_db = _legacy_db_path()
-    if not legacy_db.exists():
-        return
-
-    with sqlite3.connect(legacy_db) as conn:
-        if asset.serial_number:
-            conn.execute("DELETE FROM ativos WHERE numero_serie = ?", (asset.serial_number,))
-        else:
-            conn.execute("DELETE FROM ativos WHERE patrimonio = ?", (asset.asset_tag,))
-        conn.commit()
+def _delete_from_legacy_database(db: Session, asset: Asset) -> None:
+    """Remove o registro correspondente na tabela 'ativos' -- sem isso, a
+    próxima sync_assets_from_legacy_database() (chamada em todo
+    list_assets()) recria o ativo excluído, porque ele ainda existe na
+    origem legada."""
+    if asset.serial_number:
+        registros = db.scalars(select(Ativo).where(Ativo.numero_serie == asset.serial_number)).all()
+    else:
+        registros = db.scalars(select(Ativo).where(Ativo.patrimonio == asset.asset_tag)).all()
+    for registro in registros:
+        db.delete(registro)
 
 
 def delete_asset(db: Session, asset: Asset) -> None:
-    _delete_from_legacy_database(asset)
+    _delete_from_legacy_database(db, asset)
     db.delete(asset)
     db.commit()

@@ -1,4 +1,3 @@
-import sqlite3
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -10,14 +9,21 @@ from app.api.deps_auth import require_roles
 from app.core.agent_connections import agent_connections
 from app.core.audit_utils import compute_diff, get_client_ip, get_user_agent
 from app.core.config import settings
-from app.core.legacy_db import legacy_db_path as _legacy_db_path
 from app.core.rate_limit import limiter
 from app.crud import asset as asset_crud
 from app.crud import audit_log
 from app.models.asset import Asset
+from app.models.legacy import Ativo, Monitoramento
 from app.schemas.monitoring import MonitoringVinculoUpdate
 
 router = APIRouter()
+
+
+def _primeiro_nao_vazio(*valores: str | None) -> str:
+    for valor in valores:
+        if valor and valor.strip():
+            return valor.strip()
+    return ""
 
 
 @router.get("")
@@ -27,34 +33,17 @@ def list_monitoring(
     db: Session = Depends(get_db),
     _current_user=Depends(require_roles("admin", "manager", "viewer")),
 ) -> list[dict]:
-    legacy_db = _legacy_db_path()
-    if not legacy_db.exists():
-        return []
+    monitorados = db.scalars(select(Monitoramento).order_by(Monitoramento.ultima_atualizacao.desc())).all()
 
-    with sqlite3.connect(legacy_db) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                m.numero_serie,
-                m.modelo,
-                COALESCE(NULLIF(m.usuario, ''), NULLIF(a.usuario, ''), NULLIF(a.responsavel, ''), '') AS usuario,
-                COALESCE(m.uso_cpu_percent, 0),
-                COALESCE(m.uso_memoria_percent, 0),
-                COALESCE(m.uso_disco_percent, 0),
-                COALESCE(m.armazenamento_total_gb, 0),
-                COALESCE(m.armazenamento_usado_gb, 0),
-                COALESCE(m.armazenamento_livre_gb, 0),
-                COALESCE(m.ultima_atualizacao, ''),
-                COALESCE(m.fila_pendente_local, 0),
-                COALESCE(m.memoria_total_gb, 0),
-                COALESCE(m.memoria_usada_gb, 0)
-            FROM monitoramento m
-            LEFT JOIN ativos a ON a.numero_serie = m.numero_serie
-            ORDER BY m.ultima_atualizacao DESC
-            """
-        )
-        rows = cursor.fetchall()
+    # Complementa usuario/responsavel a partir de 'ativos' (mapa em memória em
+    # vez de um JOIN em SQL: numero_serie não tem constraint de unicidade
+    # nessa tabela, então um JOIN duplicaria a linha do notebook na lista se
+    # existissem dois ativos com o mesmo serial -- aqui fica só com o último
+    # encontrado).
+    ativos_por_serial: dict[str, Ativo] = {}
+    for ativo in db.scalars(select(Ativo).where(Ativo.numero_serie.is_not(None))).all():
+        if ativo.numero_serie:
+            ativos_por_serial[ativo.numero_serie] = ativo
 
     # A localização e o apelido de usuário vêm da mesma tabela 'assets' usada
     # pela tela de Ativos, para que os dois lugares sempre mostrem o mesmo
@@ -75,22 +64,21 @@ def list_monitoring(
             owner_by_serial[serial] = owner
 
     result = []
-    for row in rows:
-        (
-            numero_serie,
-            modelo,
-            usuario,
-            uso_cpu_percent,
-            uso_memoria_percent,
-            uso_disco_percent,
-            armazenamento_total_gb,
-            armazenamento_usado_gb,
-            armazenamento_livre_gb,
-            ultima_atualizacao,
-            fila_pendente_local,
-            memoria_total_gb,
-            memoria_usada_gb,
-        ) = row
+    for m in monitorados:
+        numero_serie = m.numero_serie
+        modelo = m.modelo
+        ativo = ativos_por_serial.get(numero_serie)
+        usuario = _primeiro_nao_vazio(m.usuario, ativo.usuario if ativo else None, ativo.responsavel if ativo else None)
+        uso_cpu_percent = m.uso_cpu_percent
+        uso_memoria_percent = m.uso_memoria_percent
+        uso_disco_percent = m.uso_disco_percent
+        armazenamento_total_gb = m.armazenamento_total_gb
+        armazenamento_usado_gb = m.armazenamento_usado_gb
+        armazenamento_livre_gb = m.armazenamento_livre_gb
+        ultima_atualizacao = m.ultima_atualizacao or ""
+        fila_pendente_local = m.fila_pendente_local
+        memoria_total_gb = m.memoria_total_gb
+        memoria_usada_gb = m.memoria_usada_gb
 
         localizacao = location_by_serial.get(numero_serie) or ""
         # Apelido definido manualmente (assets.owner) tem prioridade sobre o que
@@ -161,52 +149,40 @@ def update_monitoring_vinculo(
     legacy_fields = {k: v for k, v in updates.items() if k != "localizacao"}
     old_values: dict[str, str | None] = {}
 
-    legacy_db = _legacy_db_path()
     if legacy_fields:
-        if not legacy_db.exists():
+        # numero_serie não tem constraint de unicidade em 'ativos' -- se
+        # existir mais de um registro com o mesmo serial (dado sujo antigo),
+        # o valor "antigo" pro diff vem do primeiro encontrado, mas a
+        # atualização é aplicada a todos eles, replicando o comportamento do
+        # UPDATE ... WHERE numero_serie = ? de antes (sem LIMIT, afetava
+        # todas as linhas correspondentes).
+        ativos_rows = list(db.scalars(select(Ativo).where(Ativo.numero_serie == numero_serie)).all())
+        ativo_principal = ativos_rows[0] if ativos_rows else None
+        monitoramento_row = db.get(Monitoramento, numero_serie)
+
+        if ativo_principal is None and monitoramento_row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitoring record not found")
 
-        with sqlite3.connect(legacy_db) as conn:
-            cursor = conn.cursor()
+        current_values = {
+            "usuario": (ativo_principal.usuario if ativo_principal else None)
+            or (monitoramento_row.usuario if monitoramento_row else None),
+            "patrimonio": ativo_principal.patrimonio if ativo_principal else None,
+            "modelo_monitor": ativo_principal.modelo_monitor if ativo_principal else None,
+            "patrimonio_monitor": ativo_principal.patrimonio_monitor if ativo_principal else None,
+        }
+        old_values.update({key: current_values[key] for key in legacy_fields})
 
-            cursor.execute(
-                "SELECT usuario, patrimonio, modelo_monitor, patrimonio_monitor FROM ativos WHERE numero_serie = ?",
-                (numero_serie,),
-            )
-            ativos_row = cursor.fetchone()
+        for ativo in ativos_rows:
+            for campo, valor in legacy_fields.items():
+                setattr(ativo, campo, valor)
+            db.add(ativo)
 
-            cursor.execute(
-                "SELECT usuario FROM monitoramento WHERE numero_serie = ?",
-                (numero_serie,),
-            )
-            monitoramento_row = cursor.fetchone()
+        if monitoramento_row is not None:
+            for campo, valor in legacy_fields.items():
+                setattr(monitoramento_row, campo, valor)
+            db.add(monitoramento_row)
 
-            if ativos_row is None and monitoramento_row is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitoring record not found")
-
-            current_values = {
-                "usuario": (ativos_row[0] if ativos_row else None) or (monitoramento_row[0] if monitoramento_row else None),
-                "patrimonio": ativos_row[1] if ativos_row else None,
-                "modelo_monitor": ativos_row[2] if ativos_row else None,
-                "patrimonio_monitor": ativos_row[3] if ativos_row else None,
-            }
-            old_values.update({key: current_values[key] for key in legacy_fields})
-
-            if ativos_row is not None:
-                set_clause = ", ".join(f"{field} = ?" for field in legacy_fields)
-                cursor.execute(
-                    f"UPDATE ativos SET {set_clause} WHERE numero_serie = ?",
-                    (*legacy_fields.values(), numero_serie),
-                )
-
-            if monitoramento_row is not None:
-                set_clause = ", ".join(f"{field} = ?" for field in legacy_fields)
-                cursor.execute(
-                    f"UPDATE monitoramento SET {set_clause} WHERE numero_serie = ?",
-                    (*legacy_fields.values(), numero_serie),
-                )
-
-            conn.commit()
+        db.commit()
 
     if "localizacao" in updates or "usuario" in updates:
         asset = db.scalars(select(Asset).where(Asset.serial_number == numero_serie)).first()
