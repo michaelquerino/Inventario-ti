@@ -1,6 +1,6 @@
 from app.models.asset import Asset
 from app.models.audit_log import AuditLog
-from app.models.legacy import Ativo, Monitoramento
+from app.models.legacy import Ativo, Comando, ComandoTemplate, Monitoramento
 from app.models.ticket import Ticket
 from app.models.user import User
 

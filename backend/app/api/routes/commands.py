@@ -1,18 +1,18 @@
-import sqlite3
 import sys
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.deps_auth import require_roles
 from app.core.agent_connections import agent_connections
 from app.core.audit_utils import get_client_ip, get_user_agent
-from app.core.legacy_db import legacy_db_path as _legacy_db_path
 from app.core.legacy_db import repo_root as _repo_root
 from app.core.rate_limit import limiter
 from app.crud import audit_log
+from app.models.legacy import Comando, ComandoTemplate
 from app.schemas.command import CommandCreate, CommandRead, CommandTemplateCreate, CommandTemplateRead
 
 router = APIRouter()
@@ -64,76 +64,31 @@ Start-Process powershell -ArgumentList @('-NoProfile','-WindowStyle','Hidden','-
 """
 
 
-def _ensure_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS comandos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            numero_serie TEXT NOT NULL,
-            comando TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pendente',
-            resultado TEXT,
-            codigo_saida INTEGER,
-            criado_por TEXT,
-            criado_em TEXT NOT NULL,
-            executado_em TEXT
-        )
-        """
-    )
-    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(comandos)").fetchall()}
-    if "agendado_para" not in existing_columns:
-        conn.execute("ALTER TABLE comandos ADD COLUMN agendado_para TEXT")
-    if "modo" not in existing_columns:
-        conn.execute("ALTER TABLE comandos ADD COLUMN modo TEXT")
-
-
-def _row_to_command(row: tuple) -> dict:
+def _comando_to_dict(comando: Comando) -> dict:
     return {
-        "id": row[0],
-        "numero_serie": row[1],
-        "comando": row[2],
-        "status": row[3],
-        "resultado": row[4],
-        "codigo_saida": row[5],
-        "criado_por": row[6],
-        "criado_em": row[7],
-        "executado_em": row[8],
-        "agendado_para": row[9],
-        "modo": row[10] or "usuario",
+        "id": comando.id,
+        "numero_serie": comando.numero_serie,
+        "comando": comando.comando,
+        "status": comando.status,
+        "resultado": comando.resultado,
+        "codigo_saida": comando.codigo_saida,
+        "criado_por": comando.criado_por,
+        "criado_em": comando.criado_em,
+        "executado_em": comando.executado_em,
+        "agendado_para": comando.agendado_para,
+        # Comandos antigos (de antes da coluna existir) podem ter modo NULL.
+        "modo": comando.modo or "usuario",
     }
 
 
-_SELECT_COMMAND = """
-    SELECT id, numero_serie, comando, status, resultado, codigo_saida, criado_por, criado_em, executado_em, agendado_para, modo
-    FROM comandos
-"""
-
-
-def _ensure_templates_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS comando_templates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            comando TEXT NOT NULL,
-            criado_por TEXT,
-            criado_em TEXT NOT NULL
-        )
-        """
-    )
-
-
-def _row_to_template(row: tuple) -> dict:
+def _template_to_dict(template: ComandoTemplate) -> dict:
     return {
-        "id": row[0],
-        "nome": row[1],
-        "comando": row[2],
-        "criado_por": row[3],
-        "criado_em": row[4],
+        "id": template.id,
+        "nome": template.nome,
+        "comando": template.comando,
+        "criado_por": template.criado_por,
+        "criado_em": template.criado_em,
     }
-
-
-_SELECT_TEMPLATE = "SELECT id, nome, comando, criado_por, criado_em FROM comando_templates"
 
 
 # Apenas admin pode ver e criar comandos remotos: é execução de código na
@@ -159,23 +114,22 @@ def create_command(
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="agendado_para inválido") from exc
 
-    legacy_db = _legacy_db_path()
     criado_em = datetime.now().isoformat()
     criados: list[dict] = []
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_table(conn)
-        for numero_serie in numero_series:
-            cursor = conn.execute(
-                """
-                INSERT INTO comandos (numero_serie, comando, status, criado_por, criado_em, agendado_para, modo)
-                VALUES (?, ?, 'pendente', ?, ?, ?, ?)
-                """,
-                (numero_serie, comando, current_user.email, criado_em, agendado_para, payload.modo),
-            )
-            novo_id = cursor.lastrowid
-            row = conn.execute(f"{_SELECT_COMMAND} WHERE id = ?", (novo_id,)).fetchone()
-            criados.append(_row_to_command(row))
-        conn.commit()
+    for numero_serie in numero_series:
+        novo_comando = Comando(
+            numero_serie=numero_serie,
+            comando=comando,
+            status="pendente",
+            criado_por=current_user.email,
+            criado_em=criado_em,
+            agendado_para=agendado_para,
+            modo=payload.modo,
+        )
+        db.add(novo_comando)
+        db.flush()  # popula novo_comando.id antes do commit no fim da função
+        criados.append(_comando_to_dict(novo_comando))
+    db.commit()
 
     # Empurra na hora pros notebooks que estiverem conectados via WebSocket;
     # se algum não estiver (ainda no polling antigo, ou temporariamente
@@ -206,25 +160,17 @@ def create_command(
 @limiter.limit("60/minute")
 def list_commands(
     request: Request,
+    db: Session = Depends(get_db),
     numero_serie: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     _current_user=Depends(require_roles("admin")),
 ) -> list[dict]:
-    legacy_db = _legacy_db_path()
-    if not legacy_db.exists():
-        return []
+    statement = select(Comando).order_by(Comando.id.desc()).limit(limit)
+    if numero_serie:
+        statement = statement.where(Comando.numero_serie == numero_serie.strip())
 
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_table(conn)
-        if numero_serie:
-            rows = conn.execute(
-                f"{_SELECT_COMMAND} WHERE numero_serie = ? ORDER BY id DESC LIMIT ?",
-                (numero_serie.strip(), limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(f"{_SELECT_COMMAND} ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-
-    return [_row_to_command(row) for row in rows]
+    comandos = db.scalars(statement).all()
+    return [_comando_to_dict(comando) for comando in comandos]
 
 
 # Só deixa excluir comandos ainda pendentes: um comando que já começou a
@@ -239,19 +185,18 @@ def delete_command(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("admin")),
 ) -> None:
-    legacy_db = _legacy_db_path()
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_table(conn)
-        row = conn.execute(f"{_SELECT_COMMAND} WHERE id = ?", (command_id,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comando não encontrado")
-        if row[3] != "pendente":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Só é possível excluir comandos ainda pendentes",
-            )
-        conn.execute("DELETE FROM comandos WHERE id = ?", (command_id,))
-        conn.commit()
+    comando = db.get(Comando, command_id)
+    if comando is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comando não encontrado")
+    if comando.status != "pendente":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Só é possível excluir comandos ainda pendentes",
+        )
+
+    numero_serie, texto_comando = comando.numero_serie, comando.comando
+    db.delete(comando)
+    db.commit()
 
     audit_log.create_event(
         db,
@@ -259,7 +204,7 @@ def delete_command(
         action="command.delete",
         entity_type="command",
         entity_id=str(command_id),
-        details=f"numero_serie={row[1]}: {row[2]}",
+        details=f"numero_serie={numero_serie}: {texto_comando}",
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request),
     )
@@ -278,27 +223,21 @@ def cancel_command(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("admin")),
 ) -> dict:
-    legacy_db = _legacy_db_path()
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_table(conn)
-        row = conn.execute(f"{_SELECT_COMMAND} WHERE id = ?", (command_id,)).fetchone()
-        if row is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comando não encontrado")
-        if row[3] not in ("pendente", "executando"):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Só é possível cancelar comandos pendentes ou em execução",
-            )
-        conn.execute(
-            """
-            UPDATE comandos
-            SET status = 'erro', resultado = ?, executado_em = ?
-            WHERE id = ?
-            """,
-            ("Cancelado manualmente pelo administrador.", datetime.now().isoformat(), command_id),
+    comando = db.get(Comando, command_id)
+    if comando is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comando não encontrado")
+    if comando.status not in ("pendente", "executando"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Só é possível cancelar comandos pendentes ou em execução",
         )
-        conn.commit()
-        updated_row = conn.execute(f"{_SELECT_COMMAND} WHERE id = ?", (command_id,)).fetchone()
+
+    numero_serie, texto_comando = comando.numero_serie, comando.comando
+    comando.status = "erro"
+    comando.resultado = "Cancelado manualmente pelo administrador."
+    comando.executado_em = datetime.now().isoformat()
+    db.add(comando)
+    db.commit()
 
     audit_log.create_event(
         db,
@@ -306,12 +245,12 @@ def cancel_command(
         action="command.cancel",
         entity_type="command",
         entity_id=str(command_id),
-        details=f"numero_serie={row[1]}: {row[2]}",
+        details=f"numero_serie={numero_serie}: {texto_comando}",
         ip_address=get_client_ip(request),
         user_agent=get_user_agent(request),
     )
 
-    return _row_to_command(updated_row)
+    return _comando_to_dict(comando)
 
 
 # Gera um script pronto que baixa o executável mais recente do servidor
@@ -339,6 +278,7 @@ def get_agent_update_script(
 def create_command_template(
     request: Request,
     payload: CommandTemplateCreate,
+    db: Session = Depends(get_db),
     current_user=Depends(require_roles("admin")),
 ) -> dict:
     nome = payload.nome.strip()
@@ -346,36 +286,29 @@ def create_command_template(
     if not nome or not comando:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="nome e comando são obrigatórios")
 
-    legacy_db = _legacy_db_path()
-    criado_em = datetime.now().isoformat()
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_templates_table(conn)
-        cursor = conn.execute(
-            "INSERT INTO comando_templates (nome, comando, criado_por, criado_em) VALUES (?, ?, ?, ?)",
-            (nome, comando, current_user.email, criado_em),
-        )
-        novo_id = cursor.lastrowid
-        row = conn.execute(f"{_SELECT_TEMPLATE} WHERE id = ?", (novo_id,)).fetchone()
-        conn.commit()
+    novo_template = ComandoTemplate(
+        nome=nome,
+        comando=comando,
+        criado_por=current_user.email,
+        criado_em=datetime.now().isoformat(),
+    )
+    db.add(novo_template)
+    db.commit()
+    db.refresh(novo_template)
 
-    return _row_to_template(row)
+    return _template_to_dict(novo_template)
 
 
 @router.get("/templates", response_model=list[CommandTemplateRead])
 @limiter.limit("60/minute")
 def list_command_templates(
     request: Request,
+    db: Session = Depends(get_db),
     _current_user=Depends(require_roles("admin")),
 ) -> list[dict]:
-    legacy_db = _legacy_db_path()
-    if not legacy_db.exists():
-        return []
-
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_templates_table(conn)
-        rows = conn.execute(f"{_SELECT_TEMPLATE} ORDER BY nome COLLATE NOCASE ASC").fetchall()
-
-    return [_row_to_template(row) for row in rows]
+    statement = select(ComandoTemplate).order_by(ComandoTemplate.nome.collate("NOCASE").asc())
+    templates = db.scalars(statement).all()
+    return [_template_to_dict(template) for template in templates]
 
 
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -383,13 +316,11 @@ def list_command_templates(
 def delete_command_template(
     request: Request,
     template_id: int,
+    db: Session = Depends(get_db),
     _current_user=Depends(require_roles("admin")),
 ) -> None:
-    legacy_db = _legacy_db_path()
-    with sqlite3.connect(legacy_db) as conn:
-        _ensure_templates_table(conn)
-        cursor = conn.execute("DELETE FROM comando_templates WHERE id = ?", (template_id,))
-        conn.commit()
-
-    if cursor.rowcount == 0:
+    template = db.get(ComandoTemplate, template_id)
+    if template is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comando salvo não encontrado")
+    db.delete(template)
+    db.commit()

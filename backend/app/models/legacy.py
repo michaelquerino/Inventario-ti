@@ -4,9 +4,9 @@ de app/core/legacy_db.py). Mapeiam exatamente o schema que já existe no banco
 -- criado originalmente por database.py (agente/servidor.py) -- sem renomear
 nem alterar nenhuma coluna, então não muda nada nos dados existentes.
 
-'comandos'/'comando_templates' (fila de comandos remotos) e
-'ativos_excluidos' continuam de fora por enquanto -- ficam pra uma etapa
-seguinte, escopo separado.
+'ativos_excluidos' continua de fora por enquanto (só usada pelo agente/
+database.py, nunca pelo backend) -- fica pra uma etapa seguinte, escopo
+separado.
 """
 
 from sqlalchemy import Float, Integer, String, Text
@@ -61,3 +61,35 @@ class Monitoramento(Base):
     fila_pendente_local: Mapped[int | None] = mapped_column(Integer, default=0)
     memoria_total_gb: Mapped[float | None] = mapped_column(Float)
     memoria_usada_gb: Mapped[float | None] = mapped_column(Float)
+
+
+class Comando(Base):
+    __tablename__ = "comandos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    numero_serie: Mapped[str] = mapped_column(String, nullable=False)
+    comando: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pendente")
+    resultado: Mapped[str | None] = mapped_column(Text)
+    codigo_saida: Mapped[int | None] = mapped_column(Integer)
+    criado_por: Mapped[str | None] = mapped_column(String)
+    # Guardado como texto ISO (datetime.now().isoformat()), mesmo padrão de
+    # Monitoramento.ultima_atualizacao -- não converte os dados existentes.
+    criado_em: Mapped[str] = mapped_column(String, nullable=False)
+    executado_em: Mapped[str | None] = mapped_column(String)
+    # Colunas adicionadas depois via ALTER TABLE (COLUNAS_COMANDOS_EXTRA em
+    # database.py) -- 'modo' pode vir NULL em comandos antigos, tratado como
+    # 'usuario' na leitura (mesma regra de _row_to_command, que existia
+    # antes desta migração pra ORM).
+    agendado_para: Mapped[str | None] = mapped_column(String)
+    modo: Mapped[str | None] = mapped_column(String)
+
+
+class ComandoTemplate(Base):
+    __tablename__ = "comando_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nome: Mapped[str] = mapped_column(String, nullable=False)
+    comando: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_por: Mapped[str | None] = mapped_column(String)
+    criado_em: Mapped[str] = mapped_column(String, nullable=False)
