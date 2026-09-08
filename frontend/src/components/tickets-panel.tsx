@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { listTickets, updateTicket, type Ticket } from "@/lib/tickets-api";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { escapeHtml, printHtmlDocument } from "@/lib/export-pdf";
+import { useToast } from "@/components/ui/toast";
 
 const statusLabel: Record<Ticket["status"], string> = {
   aberto: "Aberto",
@@ -23,6 +25,7 @@ const AUTO_REFRESH_MS = 60 * 1000;
 const PAGE_SIZE = 10;
 
 export function TicketsPanel() {
+  const toast = useToast();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -112,8 +115,6 @@ export function TicketsPanel() {
   }
 
   function exportPdf() {
-    const esc = (value: string) =>
-      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const html = `
       <html><head><title>Relatorio de Chamados</title></head><body>
       <h2>Relatorio de Chamados</h2>
@@ -123,18 +124,18 @@ export function TicketsPanel() {
       ${ticketsFiltrados
         .map(
           (ticket) =>
-            `<tr><td>${esc(ticket.titulo)}</td><td>${esc(ticket.usuario || "")}</td><td>${esc(ticket.categoria || "")}</td><td>${esc(statusLabel[ticket.status])}</td><td>${esc(new Date(ticket.criado_em).toLocaleString("pt-BR"))}</td><td>${esc(ticket.respondido_por || "")}</td></tr>`,
+            `<tr><td>${escapeHtml(ticket.titulo)}</td><td>${escapeHtml(ticket.usuario || "")}</td><td>${escapeHtml(ticket.categoria || "")}</td><td>${escapeHtml(statusLabel[ticket.status])}</td><td>${escapeHtml(new Date(ticket.criado_em).toLocaleString("pt-BR"))}</td><td>${escapeHtml(ticket.respondido_por || "")}</td></tr>`,
         )
         .join("")}
       </table></body></html>
     `;
 
-    const printWindow = window.open("", "_blank", "width=1000,height=700");
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    if (!printHtmlDocument(html)) {
+      toast.push(
+        "Não foi possível abrir a janela de impressão — verifique se o navegador bloqueou o popup.",
+        "error",
+      );
+    }
   }
 
   async function handleAtualizarStatus(ticket: Ticket, status: Ticket["status"]) {

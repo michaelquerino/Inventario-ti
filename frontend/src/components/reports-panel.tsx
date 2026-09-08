@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { type Asset } from "@/lib/assets-api";
 import { Pagination } from "@/components/ui/pagination";
+import { escapeHtml, printHtmlDocument } from "@/lib/export-pdf";
+import { useToast } from "@/components/ui/toast";
 
 const PAGE_SIZE = 20;
 
@@ -43,6 +45,7 @@ function assetsToCsv(rows: Asset[]): string {
 }
 
 export function ReportsPanel({ assets }: ReportsPanelProps) {
+  const toast = useToast();
   const [status, setStatus] = useState("all");
   const [category, setCategory] = useState("all");
   const [locationQuery, setLocationQuery] = useState("");
@@ -103,8 +106,6 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
   }
 
   function exportPdf() {
-    const esc = (value: string) =>
-      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const html = `
       <html><head><title>Relatorio de Ativos</title></head><body>
       <h2>Relatorio de Ativos</h2>
@@ -114,18 +115,18 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
       ${filtered
         .map(
           (item) =>
-            `<tr><td>${esc(item.asset_tag)}</td><td>${esc(item.name)}</td><td>${esc(item.status)}</td><td>${esc(item.category || "")}</td><td>${esc(item.owner || "")}</td><td>${esc(item.location || "")}</td><td>${esc(item.notes || "")}</td></tr>`,
+            `<tr><td>${escapeHtml(item.asset_tag)}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.category || "")}</td><td>${escapeHtml(item.owner || "")}</td><td>${escapeHtml(item.location || "")}</td><td>${escapeHtml(item.notes || "")}</td></tr>`,
         )
         .join("")}
       </table></body></html>
     `;
 
-    const printWindow = window.open("", "_blank", "width=1000,height=700");
-    if (!printWindow) return;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    if (!printHtmlDocument(html)) {
+      toast.push(
+        "Não foi possível abrir a janela de impressão — verifique se o navegador bloqueou o popup.",
+        "error",
+      );
+    }
   }
 
   return (
