@@ -357,6 +357,12 @@ código novo. Verificado depois via smoke test: porta 5000 vazia, porta
 `:8000/agente/download`, e `/monitoring`, `/assets`, `/commands`
 retornando os dados reais normalmente.
 
-O arquivo `servidor.py` em si não foi apagado (só parou de ser executado)
-— fica como decisão futura arquivá-lo ou removê-lo de vez.
+### 5. `servidor.py` removido do repositório ✅
+
+Confirmado que nenhum outro arquivo `.py` do projeto importa `flask` ou
+`requests` (só `servidor.py` usava as duas) — arquivo deletado, e as duas
+dependências removidas de `requirements.txt`. Tudo que ainda mencionava
+`servidor.py` no restante do código (comentários/docstrings explicando o
+histórico da migração) foi deixado como está, já que só descreve o que
+existia antes, sem depender do arquivo.
 
