@@ -8,6 +8,7 @@ import { listMonitoring, updateMonitoringVinculo, type MonitoringItem } from "@/
 import { getApiBaseUrlCandidates } from "@/lib/session";
 import { type ThresholdSettings, defaultUiSettings } from "@/lib/ui-config";
 import { Pagination } from "@/components/ui/pagination";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 
 type HealthPayload = {
   status: string;
@@ -18,10 +19,10 @@ type SortField = "usuario" | "localizacao" | "numero_serie" | "status" | "pendin
 const AUTO_REFRESH_MS = 60 * 60 * 1000;
 const PAGE_SIZE = 20;
 
-function usageToneClass(value: number, warn: number, critical: number): string {
-  if (value >= critical) return "bg-red-100 text-red-700";
-  if (value >= warn) return "bg-amber-100 text-amber-700";
-  return "bg-emerald-100 text-emerald-700";
+function usageTone(value: number, warn: number, critical: number): BadgeTone {
+  if (value >= critical) return "danger";
+  if (value >= warn) return "warning";
+  return "success";
 }
 
 type MonitoringPanelProps = {
@@ -366,32 +367,24 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
                   <td className="px-4 py-3">{item.localizacao || "—"}</td>
                   <td className="px-4 py-3">{item.numero_serie || "—"}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        item.online_status === "online" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      }`}
-                    >
+                    <Badge tone={item.online_status === "online" ? "success" : "danger"}>
                       {item.online_status === "online" ? "Online" : "Offline"}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">{item.fila_pendente_local || 0}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${usageToneClass(item.uso_cpu_percent, thresholds.cpuWarn, thresholds.cpuCritical)}`}
-                    >
+                    <Badge tone={usageTone(item.uso_cpu_percent, thresholds.cpuWarn, thresholds.cpuCritical)}>
                       {item.uso_cpu_percent.toFixed(0)}%
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span>
                         {item.memoria_usada_gb.toFixed(1)} / {item.memoria_total_gb.toFixed(1)} GB
                       </span>
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${usageToneClass(item.uso_memoria_percent, thresholds.ramWarn, thresholds.ramCritical)}`}
-                      >
+                      <Badge tone={usageTone(item.uso_memoria_percent, thresholds.ramWarn, thresholds.ramCritical)}>
                         {item.uso_memoria_percent.toFixed(0)}%
-                      </span>
+                      </Badge>
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -399,11 +392,9 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
                       <span>
                         {item.armazenamento_usado_gb.toFixed(1)} / {item.armazenamento_total_gb.toFixed(1)} GB
                       </span>
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${usageToneClass(item.uso_disco_percent, thresholds.diskWarn, thresholds.diskCritical)}`}
-                      >
+                      <Badge tone={usageTone(item.uso_disco_percent, thresholds.diskWarn, thresholds.diskCritical)}>
                         {item.uso_disco_percent.toFixed(0)}%
-                      </span>
+                      </Badge>
                     </div>
                   </td>
                   <td className="px-4 py-3">{item.ultima_atualizacao || "—"}</td>

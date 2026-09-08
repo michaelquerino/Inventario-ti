@@ -19,6 +19,7 @@ import {
 import type { MonitoringItem } from "@/lib/monitoring-api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/ui/pagination";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 
 type CommandsPanelProps = {
   monitoringItems: MonitoringItem[];
@@ -31,11 +32,11 @@ const statusLabel: Record<RemoteCommand["status"], string> = {
   erro: "Erro",
 };
 
-const statusClass: Record<RemoteCommand["status"], string> = {
-  pendente: "bg-slate-100 text-slate-600",
-  executando: "bg-amber-100 text-amber-700",
-  concluido: "bg-emerald-100 text-emerald-700",
-  erro: "bg-red-100 text-red-700",
+const statusTone: Record<RemoteCommand["status"], BadgeTone> = {
+  pendente: "neutral",
+  executando: "warning",
+  concluido: "success",
+  erro: "danger",
 };
 
 const filtroStatusOpcoes: Array<{ value: "todos" | RemoteCommand["status"]; label: string }> = [
@@ -855,13 +856,9 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
                     <span className="text-xs text-slate-400">
                       {item.numero_serie} · {item.modelo || "—"}
                     </span>
-                    <span
-                      className={`ml-auto rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        item.online_status === "online" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      }`}
-                    >
+                    <Badge tone={item.online_status === "online" ? "success" : "danger"} size="sm" className="ml-auto">
                       {item.online_status === "online" ? "Online" : "Offline"}
-                    </span>
+                    </Badge>
                   </label>
                 ))
               )}
@@ -997,10 +994,10 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
                     ) : null}
                   </span>
                   <div className="flex items-center gap-1.5">
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusClass[cmd.status]}`}>
+                    <Badge tone={statusTone[cmd.status]}>
                       {statusLabel[cmd.status]}
                       {cmd.status === "erro" && cmd.codigo_saida !== null ? ` (código ${cmd.codigo_saida})` : ""}
-                    </span>
+                    </Badge>
                     {cmd.status === "pendente" ? (
                       <button
                         type="button"

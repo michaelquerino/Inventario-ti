@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { listTickets, updateTicket, type Ticket } from "@/lib/tickets-api";
 import { Pagination } from "@/components/ui/pagination";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 
 const statusLabel: Record<Ticket["status"], string> = {
   aberto: "Aberto",
@@ -12,10 +13,10 @@ const statusLabel: Record<Ticket["status"], string> = {
   concluido: "Concluído",
 };
 
-const statusClass: Record<Ticket["status"], string> = {
-  aberto: "bg-amber-100 text-amber-700",
-  em_andamento: "bg-blue-100 text-blue-700",
-  concluido: "bg-emerald-100 text-emerald-700",
+const statusTone: Record<Ticket["status"], BadgeTone> = {
+  aberto: "warning",
+  em_andamento: "info",
+  concluido: "success",
 };
 
 const AUTO_REFRESH_MS = 60 * 1000;
@@ -281,9 +282,9 @@ export function TicketsPanel() {
                       {new Date(ticket.criado_em).toLocaleString("pt-BR")}
                     </p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[ticket.status]}`}>
+                  <Badge tone={statusTone[ticket.status]} size="lg">
                     {statusLabel[ticket.status]}
-                  </span>
+                  </Badge>
                 </div>
 
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{ticket.descricao}</p>

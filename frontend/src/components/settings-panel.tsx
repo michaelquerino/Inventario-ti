@@ -5,6 +5,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSingleAdminMode } from "@/lib/auth-config";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 import {
   downloadBackup,
   exportBackupNow,
@@ -43,10 +44,10 @@ const backupStatusLabel: Record<BackupLog["status"], string> = {
   erro: "Erro",
 };
 
-const backupStatusClass: Record<BackupLog["status"], string> = {
-  em_andamento: "bg-amber-100 text-amber-700",
-  sucesso: "bg-emerald-100 text-emerald-700",
-  erro: "bg-red-100 text-red-700",
+const backupStatusTone: Record<BackupLog["status"], BadgeTone> = {
+  em_andamento: "warning",
+  sucesso: "success",
+  erro: "danger",
 };
 
 const backupOrigemLabel: Record<BackupLog["triggered_by"], string> = {
@@ -370,11 +371,7 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${backupStatusClass[log.status]}`}
-                      >
-                        {backupStatusLabel[log.status]}
-                      </span>
+                      <Badge tone={backupStatusTone[log.status]}>{backupStatusLabel[log.status]}</Badge>
                       {log.status === "sucesso" ? (
                         <button
                           onClick={() => void handleDownloadBackup(log)}
