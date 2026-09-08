@@ -1,9 +1,9 @@
 import sqlite3
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.legacy_db import legacy_db_path as _legacy_db_path
 from app.models.asset import Asset
 from app.schemas.asset import AssetCreate, AssetUpdate
 
@@ -15,14 +15,6 @@ LEGACY_STATUS_MAP = {
     "em manutenção": "maintenance",
     "baixado": "retired",
 }
-
-
-def _legacy_db_path() -> Path:
-    # backend/app/crud/asset.py -> repo root
-    # ativos.db e inventario.db foram unificados num arquivo só -- a tabela
-    # 'ativos' (legada) agora mora dentro de inventario.db junto com 'assets'.
-    repo_root = Path(__file__).resolve().parents[3]
-    return repo_root / "inventario.db"
 
 
 def _normalize_status(status: str | None) -> str:

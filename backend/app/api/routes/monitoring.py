@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -11,6 +10,7 @@ from app.api.deps_auth import require_roles
 from app.core.agent_connections import agent_connections
 from app.core.audit_utils import compute_diff, get_client_ip, get_user_agent
 from app.core.config import settings
+from app.core.legacy_db import legacy_db_path as _legacy_db_path
 from app.core.rate_limit import limiter
 from app.crud import asset as asset_crud
 from app.crud import audit_log
@@ -18,14 +18,6 @@ from app.models.asset import Asset
 from app.schemas.monitoring import MonitoringVinculoUpdate
 
 router = APIRouter()
-
-
-def _legacy_db_path() -> Path:
-    # backend/app/api/routes/monitoring.py -> repo root
-    # ativos.db e inventario.db foram unificados num arquivo só -- a tabela
-    # 'monitoramento' agora mora dentro de inventario.db.
-    repo_root = Path(__file__).resolve().parents[4]
-    return repo_root / "inventario.db"
 
 
 @router.get("")

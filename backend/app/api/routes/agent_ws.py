@@ -20,21 +20,16 @@ Servidor -> agente:
 import logging
 import sys
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 
 from app.core.agent_connections import agent_connections
 from app.core.config import settings
+from app.core.legacy_db import repo_root as _repo_root
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def _repo_root() -> Path:
-    # backend/app/api/routes/agent_ws.py -> repo root
-    return Path(__file__).resolve().parents[4]
 
 
 def _load_root_database():

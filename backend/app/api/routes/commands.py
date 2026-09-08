@@ -1,7 +1,6 @@
 import sqlite3
 import sys
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -10,22 +9,13 @@ from app.api.deps import get_db
 from app.api.deps_auth import require_roles
 from app.core.agent_connections import agent_connections
 from app.core.audit_utils import get_client_ip, get_user_agent
+from app.core.legacy_db import legacy_db_path as _legacy_db_path
+from app.core.legacy_db import repo_root as _repo_root
 from app.core.rate_limit import limiter
 from app.crud import audit_log
 from app.schemas.command import CommandCreate, CommandRead, CommandTemplateCreate, CommandTemplateRead
 
 router = APIRouter()
-
-
-def _repo_root() -> Path:
-    # backend/app/api/routes/commands.py -> repo root
-    return Path(__file__).resolve().parents[4]
-
-
-def _legacy_db_path() -> Path:
-    # ativos.db e inventario.db foram unificados num arquivo só -- as tabelas
-    # 'comandos'/'comando_templates' agora moram dentro de inventario.db.
-    return _repo_root() / "inventario.db"
 
 
 def _load_root_config():

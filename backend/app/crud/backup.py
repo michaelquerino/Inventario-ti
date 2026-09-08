@@ -7,16 +7,12 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from app.core.legacy_db import repo_root as _repo_root
 from app.db.backup_session import BackupSessionLocal
 from app.db.session import engine
 from app.models.backup_log import BackupLog
 
 LEGACY_DB_FILES = ("ativos.db", "inventario.db")
-
-
-def _repo_root() -> Path:
-    # backend/app/crud/backup.py -> repo root
-    return Path(__file__).resolve().parents[3]
 
 
 def _backup_dir() -> Path:

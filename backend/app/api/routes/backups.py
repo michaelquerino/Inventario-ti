@@ -11,17 +11,13 @@ from app.api.deps import get_db
 from app.api.deps_auth import require_roles
 from app.core.audit_utils import get_client_ip, get_user_agent
 from app.core.config import settings
+from app.core.legacy_db import repo_root as _repo_root
 from app.core.rate_limit import limiter
 from app.crud import audit_log, backup
 from app.models.backup_log import BackupLog
 from app.schemas.backup import BackupLogRead
 
 router = APIRouter()
-
-
-def _repo_root() -> Path:
-    # backend/app/api/routes/backups.py -> repo root
-    return Path(__file__).resolve().parents[4]
 
 
 def _to_payload(log: BackupLog) -> dict[str, Any]:
