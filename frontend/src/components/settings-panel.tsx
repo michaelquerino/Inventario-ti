@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isSingleAdminMode } from "@/lib/auth-config";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import {
   downloadBackup,
   exportBackupNow,
@@ -348,7 +349,7 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
             ) : null}
 
             {backupsCarregando ? (
-              <p className="text-sm text-slate-500">Carregando histórico...</p>
+              <SkeletonRows count={3} />
             ) : backups.length === 0 ? (
               <p className="text-sm text-slate-500">Nenhum backup registrado ainda.</p>
             ) : (

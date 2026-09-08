@@ -9,6 +9,7 @@ import { getApiBaseUrlCandidates } from "@/lib/session";
 import { type ThresholdSettings, defaultUiSettings } from "@/lib/ui-config";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 
 type HealthPayload = {
   status: string;
@@ -349,11 +350,7 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr>
-                <td className="px-4 py-6 text-slate-500" colSpan={10}>
-                  Carregando monitoramento...
-                </td>
-              </tr>
+              <SkeletonTableRows columns={10} />
             ) : items.length === 0 ? (
               <tr>
                 <td className="px-4 py-6 text-slate-500" colSpan={10}>

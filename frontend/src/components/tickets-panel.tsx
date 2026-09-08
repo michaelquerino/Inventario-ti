@@ -8,6 +8,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { escapeHtml, printHtmlDocument } from "@/lib/export-pdf";
 import { useToast } from "@/components/ui/toast";
+import { SkeletonCards } from "@/components/ui/skeleton";
 
 const statusLabel: Record<Ticket["status"], string> = {
   aberto: "Aberto",
@@ -265,7 +266,9 @@ export function TicketsPanel() {
         {erro ? <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</p> : null}
 
         {carregando ? (
-          <p className="mt-3 text-sm text-slate-500">Carregando...</p>
+          <div className="mt-3">
+            <SkeletonCards count={3} />
+          </div>
         ) : ticketsFiltrados.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">Nenhum chamado para esse filtro.</p>
         ) : (

@@ -14,6 +14,7 @@ import {
 } from "@/lib/assets-api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/ui/pagination";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 
 type FormState = {
   asset_tag: string;
@@ -319,11 +320,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr>
-                <td className="px-5 py-7 text-slate-500" colSpan={8}>
-                  Carregando ativos...
-                </td>
-              </tr>
+              <SkeletonTableRows columns={8} cellClassName="px-5 py-3" />
             ) : filteredAssets.length === 0 ? (
               <tr>
                 <td className="px-5 py-7 text-slate-500" colSpan={8}>

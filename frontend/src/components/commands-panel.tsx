@@ -20,6 +20,7 @@ import type { MonitoringItem } from "@/lib/monitoring-api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { SkeletonCards } from "@/components/ui/skeleton";
 
 type CommandsPanelProps = {
   monitoringItems: MonitoringItem[];
@@ -971,7 +972,9 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
         </div>
 
         {historicoCarregando ? (
-          <p className="mt-3 text-sm text-slate-500">Carregando...</p>
+          <div className="mt-3">
+            <SkeletonCards count={3} />
+          </div>
         ) : historicoFiltrado.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">
             {historico.length === 0 ? "Nenhum comando enviado ainda." : "Nenhum comando para esse filtro."}
