@@ -366,3 +366,100 @@ dependências removidas de `requirements.txt`. Tudo que ainda mencionava
 histórico da migração) foi deixado como está, já que só descreve o que
 existia antes, sem depender do arquivo.
 
+---
+
+## 🖥️ Interface (Fase 6)
+
+Depois da unificação de banco, o pedido seguinte foi um levantamento do que
+podia melhorar na interface do frontend (Next.js). Um auditoria identificou
+~11 pontos, implementados um a um e validados por `next build` (compilação +
+lint + checagem de tipos) a cada passo, já que este ambiente não tem acesso a
+navegador pra teste visual direto.
+
+### 1. Confirmação antes de executar comando remoto ✅
+
+O maior risco encontrado: o painel de Comandos rodava PowerShell (inclusive
+em modo Administrador/SYSTEM) nos notebooks selecionados sem nenhum passo de
+confirmação. Criado `components/ui/confirm-dialog.tsx` (modal reutilizável)
+e aplicado antes do envio, mostrando destino, comando completo e um aviso
+extra em vermelho no modo Administrador.
+
+### 2. Sistema de toast ✅
+
+`components/ui/toast.tsx` (`ToastProvider` no layout raiz + hook `useToast`).
+Substituiu um campo de mensagem único no dashboard que várias ações
+diferentes sobrescreviam entre si (ex: resolver auditoria e exportar CSV
+"brigavam" pelo mesmo aviso). De quebra, adicionou confirmação de sucesso
+onde antes não existia nenhuma (ex: "Pendência de auditoria resolvida.").
+
+### 3. `window.confirm` nativo substituído por modal ✅
+
+Exclusão de ativo e importação de backup (que sobrescreve o banco de
+produção) usavam o `confirm()` do navegador — funcional, mas sem estilo e
+com o aviso de importação espremido num alert de uma linha só. Trocados
+pelo mesmo `ConfirmDialog` do item 1.
+
+### 4. Código morto removido ✅
+
+`components/inventory-table.tsx` + `lib/inventory-data.ts` (tabela
+duplicada com dados mock, sem nenhuma referência no resto do código) e a
+dependência `@tanstack/react-table` (instalada, nunca importada) — 178
+linhas a menos.
+
+### 5. Paginação ✅
+
+Nenhuma lista tinha paginação (Ativos, Monitoramento, Relatórios, Chamados,
+Histórico de Comandos) — funcionava bem com a base atual (~65 ativos), mas
+não escalava. Criado `components/ui/pagination.tsx`, reutilizado nas 5
+telas; exportação de CSV/PDF continua operando sobre todos os itens
+filtrados, não só a página visível.
+
+### 6. Cores de status centralizadas ✅
+
+As mesmas 4-5 combinações de cor (verde/vermelho/amarelo/azul/cinza) eram
+redefinidas do zero em Monitoramento, Comandos, Chamados e Backups. Criado
+`components/ui/badge.tsx` (componente `Badge` com tom + tamanho) e trocado
+nos 4 lugares — um ajuste de cor futuro agora é num arquivo só.
+
+### 7. Flash do dashboard antes do login ser confirmado ✅
+
+A tela montava o menu/dashboard completo (com permissões de "viewer" por
+padrão) enquanto a checagem assíncrona de login ainda rodava, e só depois
+redirecionava se o token fosse inválido. Adicionado um estado
+`authStatus` que mostra um spinner simples até a checagem terminar, então
+o dashboard nunca chega a aparecer pra quem não está autenticado.
+**Observação:** o ideal seria bloquear isso no middleware do Next.js
+(nível de servidor), mas o token vive só em `localStorage` (o middleware
+não consegue ler) — trocar esse mecanismo seria uma mudança maior, fora do
+escopo deste ajuste pontual.
+
+### 8. Exportação de PDF consolidada ✅
+
+`exportPdf()` existia duplicada (com a mesma lógica de escapar HTML e abrir
+janela de impressão) em Relatórios e Chamados. Extraído pra
+`lib/export-pdf.ts`; agora também avisa via toast se o navegador bloquear o
+popup de impressão, em vez de falhar em silêncio.
+
+### 9. Skeletons de carregamento ✅
+
+Todo carregamento mostrava só o texto "Carregando...". Criado
+`components/ui/skeleton.tsx` (placeholders de tabela, cards e linhas) e
+aplicado em Ativos, Monitoramento, Chamados, Comandos e Backups.
+
+### 10. Acessibilidade ✅
+
+Botões só-ícone (visualizar/editar/excluir ativo; sino/engrenagem/sair no
+cabeçalho; excluir/cancelar comando) dependiam só do `title` (tooltip), sem
+nome acessível pra leitor de tela — adicionado `aria-label` correspondente.
+O seletor "Executar como" (Usuário/Administrador) usava `className="hidden"`
+no rádio, o que tira o elemento da navegação por teclado — trocado por
+`sr-only` (mantém focável, só esconde visualmente) com um anel de foco
+visível.
+
+### 11. Error boundary ✅
+
+Não existia `error.tsx` — uma exceção não tratada em qualquer tela quebrava
+a página inteira sem alternativa de recuperação. Criado
+`app/error.tsx`, cobrindo todas as rotas (dashboard, login, registro,
+chamados) com uma tela de erro amigável e botão de "Tentar novamente".
+
