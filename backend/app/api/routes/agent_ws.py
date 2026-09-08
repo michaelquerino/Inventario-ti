@@ -1,8 +1,15 @@
 """Canal WebSocket usado pelos agentes (notebooks) pra falar com o servidor:
-substitui o polling HTTP antigo (que ainda existe em servidor.py/porta 5000,
-intacto, pros agentes que ainda não migraram) por uma conexão persistente --
-comando chega na hora, e o servidor sabe em tempo real se o notebook está
-online (a conexão aberta É o sinal, sem precisar esperar silêncio de horas).
+substitui o polling HTTP antigo (servidor.py/Flask, porta 5000) por uma
+conexão persistente -- comando chega na hora, e o servidor sabe em tempo
+real se o notebook está online (a conexão aberta É o sinal, sem precisar
+esperar silêncio de horas). Nenhum build atual do agente (agente.py ou
+agente_manual.py) chama mais os endpoints HTTP antigos -- os dois só usam
+este canal WebSocket pra reportar e receber comandos.
+
+Este módulo também serve GET /agente/download (mesmo caminho que existia em
+servidor.py), usado pelo script de autoatualização remota (veja
+api/routes/commands.py::_build_agent_update_script) -- é a única coisa que
+ainda dependia do Flask depois da migração pra WebSocket.
 
 Protocolo (mensagens JSON, um por linha via WebSocket):
 
@@ -18,10 +25,12 @@ Servidor -> agente:
 """
 
 import logging
+import os
 import sys
 from datetime import datetime
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.responses import FileResponse
 from starlette.concurrency import run_in_threadpool
 
 from app.core.agent_connections import agent_connections
@@ -39,6 +48,35 @@ def _load_root_database():
     import database  # database.py na raiz do repositório (mesmo usado pelo servidor.py Flask)
 
     return database
+
+
+def _load_root_config():
+    repo_root = str(_repo_root())
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    import config  # config.py na raiz do repositório (usado pelo agente/servidor)
+
+    return config
+
+
+# Equivalente ao antigo GET /agente/download em servidor.py (Flask, porta
+# 5000) -- migrado pra cá pra não depender mais do Flask rodando só pra
+# servir esse arquivo. Mesmo caminho e mesma autenticação por X-API-Key,
+# só a porta muda no script que baixa isso (veja
+# api/routes/commands.py::_build_agent_update_script).
+@router.get("/agente/download")
+def agente_download(request: Request) -> FileResponse:
+    api_key = request.headers.get("x-api-key")
+    if not api_key or api_key != settings.agent_api_key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="API key inválida")
+
+    cfg = _load_root_config()
+    caminho = getattr(cfg, "AGENTE_EXE_PATH", None)
+    if not caminho or not os.path.isfile(caminho):
+        logger.warning("Download de agente solicitado, mas executável não encontrado em %s", caminho)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Executável do agente não encontrado no servidor")
+
+    return FileResponse(caminho, media_type="application/octet-stream", filename="Agente_manual.exe")
 
 
 @router.websocket("/ws/agent")

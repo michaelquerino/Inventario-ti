@@ -254,8 +254,10 @@ def cancel_command(
 
 
 # Gera um script pronto que baixa o executável mais recente do servidor
-# (rota /agente/download em servidor.py) e o troca no notebook. Fica pronto
-# para colar/editar no campo de comando; nada é executado a partir daqui.
+# (rota /agente/download, agora servida pelo próprio backend FastAPI -- veja
+# api/routes/agent_ws.py -- em vez do Flask/servidor.py) e o troca no
+# notebook. Fica pronto para colar/editar no campo de comando; nada é
+# executado a partir daqui.
 @router.get("/agent-update-script")
 @limiter.limit("30/minute")
 def get_agent_update_script(
@@ -267,7 +269,8 @@ def get_agent_update_script(
     if not enderecos:
         raise HTTPException(status_code=500, detail="Nenhum endereço de servidor configurado em config.py")
 
-    script = _build_agent_update_script(enderecos, cfg.PORTA_SERVIDOR, cfg.API_KEY_AGENTE)
+    porta_backend = getattr(cfg, "PORTA_BACKEND_WS", 8000)
+    script = _build_agent_update_script(enderecos, porta_backend, cfg.API_KEY_AGENTE)
     return {"script": script}
 
 
