@@ -1,0 +1,44 @@
+__pycache__/
+*.pyc
+*.pyo
+*.sqlite3
+*.db
+*.db.OBSOLETO-nao-usar
+.venv/
+venv/
+env/
+node_modules/
+.next/
+dist/
+build/
+.env
+
+# Backups locais (grandes, com dados reais e binários antigos) -- nunca
+# devem ir pro histórico do repositório.
+backups/
+
+# Logs gerados em runtime pelo watchdog/servidor/agente.
+logs/
+*.log
+
+# Executáveis compilados (PyInstaller) do agente -- distribuídos direto pra
+# pasta, não fazem sentido versionados (binário grande, sem diff útil).
+# Redistribua via novo build (scripts/*.ps1), não via git.
+*.exe
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Certificado/chave TLS -- backend/certs/key.pem é uma chave privada de
+# verdade, nunca pode ir pro histórico do git.
+backend/certs/
+*.pem
+*.key
+
+# Configuração pessoal de editor/ferramentas -- específica desta máquina,
+# não faz sentido compartilhar via repositório.
+.claude/settings.local.json
+.vscode/
+.tmp.driveupload/
+

@@ -1,0 +1,42 @@
+PACOTE DE ONBOARDING - InventarioTI
+=====================================
+Gerado em 14/08/2026, com todas as correções da tarefa admin (intervalo,
+duração, bateria, ACL, quoting) e o agente sem o bug de leitura de resultado
+(BOM/UTF-8).
+
+O QUE FAZER EM CADA NOTEBOOK
+-----------------------------
+1. Copie esta pasta inteira para o notebook (pen drive, rede, RDP - qualquer
+   forma de transferir arquivos).
+
+2. Rode "onboarding-notebook-admin.bat" clicando com o botão direito e
+   escolhendo "Executar como administrador".
+   Isso instala o agente, cria a tarefa normal e a tarefa elevada de
+   comandos admin, tudo com as versões corrigidas.
+
+3. Só se o notebook NÃO estiver na rede 192.168.1.x ou 192.168.8.x (ou seja,
+   não consegue alcançar o servidor 192.168.1.87 direto): rode também
+   "instalar-tailscale.ps1" como Administrador. Isso conecta o notebook na
+   malha Tailscale, permitindo que ele apareça online mesmo fora dessas
+   redes. Se o notebook já está numa dessas redes, pule este passo.
+
+4. Confira no painel de monitoramento (http://192.168.1.87:3000) se o
+   notebook aparece como "online".
+
+ARQUIVOS DESTA PASTA
+---------------------
+- onboarding-notebook.ps1        -> script principal (chamado pelo .bat)
+- onboarding-notebook-admin.bat  -> use este para rodar como administrador
+- executar_comando_admin.ps1     -> copiado automaticamente pelo onboarding
+- Agente_manual.exe              -> agente atualizado (não precisa baixar
+                                     separadamente nem mandar "atualizar
+                                     agente" depois)
+- instalar-tailscale.ps1         -> só para notebooks fora da rede local
+
+OBSERVAÇÃO DE SEGURANÇA
+-------------------------
+O "instalar-tailscale.ps1" tem uma chave de autenticação da rede Tailscale
+embutida (reutilizável, sem senha de usuário). Não distribua esta pasta além
+do necessário para o onboarding. Depois que todos os notebooks estiverem
+migrados, considere revogar/rotacionar essa chave no painel do Tailscale
+(https://login.tailscale.com/admin/settings/keys).

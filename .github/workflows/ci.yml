@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-tests:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Rodar testes
+        run: pytest -v
+
+  frontend-build:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      # "npm run lint" (next lint) não está configurado neste projeto -- sem
+      # um eslint config commitado, ele abre um wizard interativo pra criar
+      # um na hora, o que trava em CI (não-interativo). O build do Next já
+      # faz lint + checagem de tipos por conta própria (etapa "Linting and
+      # checking validity of types" no log), então cobre o essencial mesmo
+      # assim. Configurar o eslint.config.* direito fica pra outra hora.
+      - name: Build
+        run: npm run build
