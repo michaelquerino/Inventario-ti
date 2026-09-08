@@ -288,3 +288,75 @@ validar o workflow localmente (ambiente virtual novo, do zero), apareceram
 Com essas correções, `pytest` (backend) e `next build` (frontend) passam
 limpos numa instalação do zero.
 
+---
+
+## 🗄️ Unificação de Banco: ORM + Aposentadoria do Flask (Fase 5)
+
+Continuação direta do item "pendente" registrado na Fase 3: as tabelas
+legadas (`ativos`, `monitoramento`, `comandos`, `comando_templates`) saíram
+de `sqlite3.connect()` cru espalhado pelo código e passaram a viver dentro
+do schema SQLAlchemy do backend, com Alembic controlando o histórico.
+Executado em etapas, cada uma validada contra os dados reais de produção
+(instância isolada apontando pra uma cópia do banco, comparando resposta
+JSON antiga x nova campo a campo) antes de ir pro ar.
+
+### 1. Rede de segurança (testes + Alembic) ✅
+
+Antes de tocar em qualquer query, foram criados testes cobrindo o
+comportamento atual de `database.py` (`tests/test_database.py`, 8 testes:
+CRUD de ativos, teste de regressão pra exclusão-não-recria, upsert de
+monitoramento, fila de comandos) e o Alembic foi adotado no backend
+(`backend/alembic/`) usando o padrão "onboard num banco já existente": gera
+a migration contra um SQLite temporário vazio, confirma que ela aplica
+limpo, e no banco real de produção só roda `alembic stamp head` — sem
+executar nenhum DDL, já que as tabelas já existiam batendo exatamente com
+os novos models.
+
+### 2. Fonte única pro caminho do banco legado ✅
+
+Criado `backend/app/core/legacy_db.py`: um único ponto (`legacy_db_path()`)
+que decide qual arquivo `.db` é o real (prioriza `ativos.db`, cai pra
+`inventario.db`), usado por todo o backend daqui pra frente. Existe
+justamente pra não repetir o quase-bug documentado na Fase 3 (correção
+aplicada no banco órfão errado).
+
+### 3. `ativos`/`monitoramento` migrados pra ORM ✅
+
+Criados os models SQLAlchemy `Ativo` e `Monitoramento`
+(`backend/app/models/legacy.py`), espelhando as colunas exatas do schema
+raw-SQL existente (nenhuma coluna renomeada). `sync_assets_from_legacy_database`
+e as rotas de `backend/app/api/routes/monitoring.py` passaram a usar sessão
+ORM em vez de `sqlite3.connect()` direto.
+
+### 3b. `comandos`/`comando_templates` migrados pra ORM ✅
+
+Mesmo tratamento pras tabelas de comandos: models `Comando` e
+`ComandoTemplate`, e `backend/app/api/routes/commands.py` reescrito —
+removidas as funções que criavam tabela na mão (`_ensure_table`,
+`_ensure_templates_table`) e as queries cruas, todas as 7 rotas migradas
+pra ORM.
+
+### 4. `servidor.py` (Flask, porta 5000) aposentado ✅
+
+Confirmado (grep em `agente.py` e `agente_manual.py`) que nenhum build
+atual do agente fala HTTP com o Flask — os dois usam só o WebSocket
+(`agente_ws_client.ClienteAgenteWS`) pra reportar e receber comandos. A
+única rota do Flask que ainda tinha uso real era `GET /agente/download`
+(baixado pelo script de autoatualização remota dos agentes), que foi
+migrada pro backend FastAPI (`backend/app/api/routes/agent_ws.py`), com a
+mesma autenticação por `X-API-Key`. O gerador do script de atualização
+(`commands.py::_build_agent_update_script`) passou a apontar pra porta do
+backend (8000) em vez da porta do Flask (5000).
+
+**Ação em produção:** `scripts/watchdog-stack.ps1` editado pra não subir
+mais o `servidor.py` (função `Start-Collector` mantida no arquivo só de
+referência, não é mais chamada no loop principal), o processo Flask que
+já estava rodando foi parado manualmente, e o backend reiniciado com o
+código novo. Verificado depois via smoke test: porta 5000 vazia, porta
+8000 respondendo com o PID novo, script de atualização apontando pra
+`:8000/agente/download`, e `/monitoring`, `/assets`, `/commands`
+retornando os dados reais normalmente.
+
+O arquivo `servidor.py` em si não foi apagado (só parou de ser executado)
+— fica como decisão futura arquivá-lo ou removê-lo de vez.
+
