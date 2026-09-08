@@ -1,0 +1,4 @@
+# Dependências só de desenvolvimento/testes -- não fazem parte do agente
+# distribuído (requirements.txt continua enxuto pro build do PyInstaller).
+-r requirements.txt
+pytest==8.3.3

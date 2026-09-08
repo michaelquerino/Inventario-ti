@@ -30,6 +30,10 @@ logs/
 .mypy_cache/
 .ruff_cache/
 
+# Relatórios pontuais gerados sob demanda (ficam desatualizados na hora,
+# não fazem sentido versionados).
+notebooks-offline-verificar.txt
+
 # Certificado/chave TLS -- backend/certs/key.pem é uma chave privada de
 # verdade, nunca pode ir pro histórico do git.
 backend/certs/

@@ -27,6 +27,32 @@ jobs:
       - name: Rodar testes
         run: pytest -v
 
+      - name: Validar migração Alembic contra um banco novo (do zero)
+        run: |
+          rm -f /tmp/alembic-check.db
+          DATABASE_URL="sqlite:////tmp/alembic-check.db" alembic upgrade head
+
+  agent-tests:
+    name: Agente/database.py (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # database.py só usa a biblioteca padrão do Python (sqlite3, os, sys,
+      # logging, datetime) -- não precisa do requirements.txt completo do
+      # agente (customtkinter etc. são só pra GUI/empacotamento, não fazem
+      # sentido instalar num runner Linux headless).
+      - name: Instalar pytest
+        run: pip install pytest==8.3.3
+
+      - name: Rodar testes
+        run: pytest tests -v
+
   frontend-build:
     name: Frontend (build)
     runs-on: ubuntu-latest
