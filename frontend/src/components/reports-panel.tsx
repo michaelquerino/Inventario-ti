@@ -1,9 +1,12 @@
 "use client";
 
 import { Download, FileText, Filter } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { type Asset } from "@/lib/assets-api";
+import { Pagination } from "@/components/ui/pagination";
+
+const PAGE_SIZE = 20;
 
 type ReportsPanelProps = {
   assets: Asset[];
@@ -45,6 +48,7 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
   const [locationQuery, setLocationQuery] = useState("");
   const [notesQuery, setNotesQuery] = useState("");
   const [notesFilter, setNotesFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -70,6 +74,12 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
       return statusOk && categoryOk && locationOk && notesPresenceOk && notesQueryOk;
     });
   }, [assets, status, category, locationQuery, notesFilter, notesQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [status, category, locationQuery, notesFilter, notesQuery]);
+
+  const paginated = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
 
   const compliance = useMemo(() => {
     const missingOwner = filtered.filter((item) => !item.owner || !item.owner.trim()).length;
@@ -215,7 +225,8 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
         </article>
       </div>
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
+      <div className="mt-5 rounded-2xl border border-slate-200">
+      <div className="overflow-x-auto">
         <table className="min-w-full table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
             <col className="w-28" />
@@ -245,7 +256,7 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
                 </td>
               </tr>
             ) : (
-              filtered.map((item) => (
+              paginated.map((item) => (
                 <tr key={item.id}>
                   <td className="truncate px-4 py-3 font-semibold text-brand-700">{item.asset_tag}</td>
                   <td className="truncate px-4 py-3">{item.name}</td>
@@ -261,6 +272,9 @@ export function ReportsPanel({ assets }: ReportsPanelProps) {
             )}
           </tbody>
         </table>
+      </div>
+
+      <Pagination page={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
       <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { listMonitoring, updateMonitoringVinculo, type MonitoringItem } from "@/lib/monitoring-api";
 import { getApiBaseUrlCandidates } from "@/lib/session";
 import { type ThresholdSettings, defaultUiSettings } from "@/lib/ui-config";
+import { Pagination } from "@/components/ui/pagination";
 
 type HealthPayload = {
   status: string;
@@ -15,6 +16,7 @@ type HealthPayload = {
 type SortField = "usuario" | "localizacao" | "numero_serie" | "status" | "pending" | "cpu" | "ram" | "storage" | "updated";
 
 const AUTO_REFRESH_MS = 60 * 60 * 1000;
+const PAGE_SIZE = 20;
 
 function usageToneClass(value: number, warn: number, critical: number): string {
   if (value >= critical) return "bg-red-100 text-red-700";
@@ -39,6 +41,7 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
   const [editLocalizacao, setEditLocalizacao] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [page, setPage] = useState(1);
 
   const refreshMonitoring = useCallback(async () => {
     setLoading(true);
@@ -156,7 +159,18 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
     return copy;
   }, [items, sortDirection, sortField]);
 
+  const pagedItems = useMemo(
+    () => sortedItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [sortedItems, page],
+  );
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sortedItems.length / PAGE_SIZE));
+    if (page > totalPages) setPage(totalPages);
+  }, [sortedItems.length, page]);
+
   function toggleSort(field: SortField) {
+    setPage(1);
     if (sortField === field) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
       return;
@@ -279,7 +293,8 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
         </article>
       </div>
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
+      <div className="mt-5 rounded-2xl border border-slate-200">
+      <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
           <thead className="bg-slate-50 text-slate-500">
             <tr>
@@ -345,7 +360,7 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
                 </td>
               </tr>
             ) : (
-              sortedItems.map((item) => (
+              pagedItems.map((item) => (
                 <tr key={item.numero_serie} className="hover:bg-slate-50">
                   <td className="px-4 py-3">{item.usuario || "—"}</td>
                   <td className="px-4 py-3">{item.localizacao || "—"}</td>
@@ -406,6 +421,9 @@ export function MonitoringPanel({ thresholds = defaultUiSettings.thresholds }: M
             )}
           </tbody>
         </table>
+      </div>
+
+      <Pagination page={page} totalItems={sortedItems.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
       {editingItem ? (

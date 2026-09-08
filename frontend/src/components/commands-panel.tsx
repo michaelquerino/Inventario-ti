@@ -18,6 +18,7 @@ import {
 } from "@/lib/commands-api";
 import type { MonitoringItem } from "@/lib/monitoring-api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Pagination } from "@/components/ui/pagination";
 
 type CommandsPanelProps = {
   monitoringItems: MonitoringItem[];
@@ -55,6 +56,8 @@ const certEscopoOpcoes: Array<{ value: "CurrentUser" | "LocalMachine"; label: st
   { value: "CurrentUser", label: "Usuário atual (sem admin)" },
   { value: "LocalMachine", label: "Máquina local (requer admin)" },
 ];
+
+const HISTORICO_PAGE_SIZE = 15;
 
 const pastaBaseOpcoes: Array<{ value: string; label: string; expr: string }> = [
   { value: "Temp", label: "Temporária (%TEMP%)", expr: "$env:TEMP" },
@@ -217,6 +220,7 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
   const [confirmacaoEnvio, setConfirmacaoEnvio] = useState<{ comandoTexto: string; agendadoIso?: string } | null>(
     null,
   );
+  const [historicoPage, setHistoricoPage] = useState(1);
 
   const arquivoEhPfx = useMemo(() => {
     if (!arquivoEscolhido) return false;
@@ -349,6 +353,20 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
     if (filtroStatus === "todos" || abaHistorico === "pendentes_offline") return base;
     return base.filter((cmd) => cmd.status === filtroStatus);
   }, [historicoRecentes, historicoPendentesOffline, abaHistorico, filtroStatus]);
+
+  useEffect(() => {
+    setHistoricoPage(1);
+  }, [abaHistorico, filtroStatus]);
+
+  const historicoPaginado = useMemo(
+    () => historicoFiltrado.slice((historicoPage - 1) * HISTORICO_PAGE_SIZE, historicoPage * HISTORICO_PAGE_SIZE),
+    [historicoFiltrado, historicoPage],
+  );
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(historicoFiltrado.length / HISTORICO_PAGE_SIZE));
+    if (historicoPage > totalPages) setHistoricoPage(totalPages);
+  }, [historicoFiltrado.length, historicoPage]);
 
   async function handleExcluirComando(cmd: RemoteCommand) {
     setErro("");
@@ -963,7 +981,7 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
           </p>
         ) : (
           <div className="mt-3 max-h-[70vh] space-y-3 overflow-auto">
-            {historicoFiltrado.map((cmd) => (
+            {historicoPaginado.map((cmd) => (
               <div key={cmd.id} className="rounded-2xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-sm font-medium text-slate-900">
@@ -1034,6 +1052,14 @@ export function CommandsPanel({ monitoringItems }: CommandsPanelProps) {
             ))}
           </div>
         )}
+
+        <Pagination
+          page={historicoPage}
+          totalItems={historicoFiltrado.length}
+          pageSize={HISTORICO_PAGE_SIZE}
+          onPageChange={setHistoricoPage}
+          bare
+        />
       </section>
     </div>
   );

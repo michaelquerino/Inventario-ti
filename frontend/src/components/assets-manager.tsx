@@ -13,6 +13,7 @@ import {
   type AssetPayload,
 } from "@/lib/assets-api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Pagination } from "@/components/ui/pagination";
 
 type FormState = {
   asset_tag: string;
@@ -56,6 +57,7 @@ const statusLabel: Record<string, string> = {
 const CATEGORIAS_FIXAS = ["Notebook", "Equipamento Técnico", "Câmera", "Celular", "Impressora"];
 
 const AUTO_REFRESH_MS = 60 * 60 * 1000;
+const PAGE_SIZE = 20;
 
 export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -71,6 +73,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
   const [compactLayout, setCompactLayout] = useState(true);
   const [viewOnly, setViewOnly] = useState(false);
   const [ativoParaExcluir, setAtivoParaExcluir] = useState<Asset | null>(null);
+  const [page, setPage] = useState(1);
 
   async function loadAssets() {
     setLoading(true);
@@ -126,6 +129,15 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
       return matchesQuery && matchesStatus;
     });
   }, [assets, query, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, statusFilter]);
+
+  const pagedAssets = useMemo(
+    () => filteredAssets.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredAssets, page],
+  );
 
   function openCreateModal() {
     setEditingId(null);
@@ -319,7 +331,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
                 </td>
               </tr>
             ) : (
-              filteredAssets.map((asset) => (
+              pagedAssets.map((asset) => (
                 <tr key={asset.id} className="hover:bg-slate-50">
                   <td className={`truncate px-5 font-semibold text-brand-700 ${compactLayout ? "py-2" : "py-4"}`}>
                     {asset.asset_tag}
@@ -384,6 +396,8 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
           </tbody>
         </table>
       </div>
+
+      <Pagination page={page} totalItems={filteredAssets.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">

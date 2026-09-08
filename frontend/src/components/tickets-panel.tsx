@@ -4,6 +4,7 @@ import { Download, FileText } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { listTickets, updateTicket, type Ticket } from "@/lib/tickets-api";
+import { Pagination } from "@/components/ui/pagination";
 
 const statusLabel: Record<Ticket["status"], string> = {
   aberto: "Aberto",
@@ -18,6 +19,7 @@ const statusClass: Record<Ticket["status"], string> = {
 };
 
 const AUTO_REFRESH_MS = 60 * 1000;
+const PAGE_SIZE = 10;
 
 export function TicketsPanel() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -29,6 +31,7 @@ export function TicketsPanel() {
   const [dataFim, setDataFim] = useState("");
   const [respostas, setRespostas] = useState<Record<number, string>>({});
   const [salvandoId, setSalvandoId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
 
   async function refresh() {
     try {
@@ -68,6 +71,15 @@ export function TicketsPanel() {
       return statusOk && categoriaOk && inicioOk && fimOk;
     });
   }, [tickets, filtroStatus, filtroCategoria, dataInicio, dataFim]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filtroStatus, filtroCategoria, dataInicio, dataFim]);
+
+  const ticketsPaginados = useMemo(
+    () => ticketsFiltrados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [ticketsFiltrados, page],
+  );
 
   function exportCsv() {
     const header = ["id", "titulo", "usuario", "patrimonio", "categoria", "status", "criado_em", "respondido_por", "resposta"];
@@ -255,8 +267,8 @@ export function TicketsPanel() {
         ) : ticketsFiltrados.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">Nenhum chamado para esse filtro.</p>
         ) : (
-          <div className="mt-3 max-h-[70vh] space-y-3 overflow-auto">
-            {ticketsFiltrados.map((ticket) => (
+          <div className="mt-3 space-y-3">
+            {ticketsPaginados.map((ticket) => (
               <div key={ticket.id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -325,6 +337,8 @@ export function TicketsPanel() {
             ))}
           </div>
         )}
+
+        <Pagination page={page} totalItems={ticketsFiltrados.length} pageSize={PAGE_SIZE} onPageChange={setPage} bare />
       </div>
     </section>
   );
