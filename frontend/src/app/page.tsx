@@ -33,6 +33,7 @@ import { listAssets, type Asset } from "@/lib/assets-api";
 import { listMonitoring, type MonitoringItem } from "@/lib/monitoring-api";
 import { clearToken, getApiBaseUrlCandidates, getToken } from "@/lib/session";
 import { defaultUiSettings, loadUiSettings, saveUiSettings, type UiSettings } from "@/lib/ui-config";
+import { useToast } from "@/components/ui/toast";
 
 type SidebarSection = "dashboard" | "assets" | "monitoring" | "reports" | "tickets" | "commands" | "settings";
 type TopTab = "assets" | "cloud" | "discovery" | "monitoring";
@@ -116,10 +117,10 @@ function assetsToCsv(assets: Asset[]): string {
 
 export default function HomePage() {
   const router = useRouter();
+  const toast = useToast();
   const [activeSection, setActiveSection] = useState<SidebarSection>("dashboard");
   const [activeTab, setActiveTab] = useState<TopTab>("assets");
   const [headerQuery, setHeaderQuery] = useState("");
-  const [actionMessage, setActionMessage] = useState("");
   const [allAssets, setAllAssets] = useState<Asset[]>([]);
   const [monitoringItems, setMonitoringItems] = useState<MonitoringItem[]>([]);
   const [pendingAudits, setPendingAudits] = useState<AuditEvent[]>([]);
@@ -141,9 +142,9 @@ export default function HomePage() {
       setMonitoringItems(monitoring);
       setPendingAudits(pending);
     } catch {
-      setActionMessage("Nao foi possivel atualizar dados operacionais agora.");
+      toast.push("Não foi possível atualizar dados operacionais agora.", "error");
     }
-  }, []);
+  }, [toast]);
 
   const refreshSummary = useCallback(async () => {
     try {
@@ -177,12 +178,12 @@ export default function HomePage() {
 
   async function handleResolveAudit(eventId: number) {
     setResolvingAuditId(eventId);
-    setActionMessage("");
     try {
       await resolvePendingAudit(eventId);
       await Promise.all([refreshOperationalData(), refreshSummary()]);
+      toast.push("Pendência de auditoria resolvida.", "success");
     } catch (err) {
-      setActionMessage(err instanceof Error ? err.message : "Erro ao resolver pendência de auditoria");
+      toast.push(err instanceof Error ? err.message : "Erro ao resolver pendência de auditoria", "error");
     } finally {
       setResolvingAuditId(null);
     }
@@ -190,12 +191,12 @@ export default function HomePage() {
 
   async function handleResolveAllAudits() {
     setResolvingAllAudits(true);
-    setActionMessage("");
     try {
       await resolveAllPendingAudits();
       await Promise.all([refreshOperationalData(), refreshSummary()]);
+      toast.push("Pendências de auditoria resolvidas.", "success");
     } catch (err) {
-      setActionMessage(err instanceof Error ? err.message : "Erro ao resolver pendências de auditoria");
+      toast.push(err instanceof Error ? err.message : "Erro ao resolver pendências de auditoria", "error");
     } finally {
       setResolvingAllAudits(false);
     }
@@ -324,21 +325,17 @@ export default function HomePage() {
 
   const isDashboard = activeSection === "dashboard";
 
-  function showMessage(message: string) {
-    setActionMessage(message);
-  }
-
   function handleSidebarClick(section: SidebarSection) {
     if (section === "commands") {
       if (currentUser.role !== "admin") {
-        showMessage("Apenas o administrador tem acesso a Comandos.");
+        toast.push("Apenas o administrador tem acesso a Comandos.", "error");
         return;
       }
     } else {
       const rolePermissions = uiSettings.permissions[currentUser.role];
       const permissionKey = sectionToPermission[section];
       if (section !== "settings" && permissionKey && !rolePermissions[permissionKey]) {
-        showMessage("Seu perfil não possui acesso a este módulo.");
+        toast.push("Seu perfil não possui acesso a este módulo.", "error");
         return;
       }
     }
@@ -349,12 +346,6 @@ export default function HomePage() {
     }
     if (section === "assets" || section === "dashboard") {
       setActiveTab("assets");
-    }
-    if (section === "reports") {
-      showMessage("Relatórios abertos.");
-    }
-    if (section === "settings") {
-      showMessage("Configurações abertas. Ajustes salvos são aplicados no sistema.");
     }
   }
 
@@ -371,9 +362,9 @@ export default function HomePage() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showMessage("Exportação concluída.");
+      toast.push("Exportação concluída.", "success");
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : "Falha ao exportar ativos.");
+      toast.push(error instanceof Error ? error.message : "Falha ao exportar ativos.", "error");
     }
   }
 
@@ -386,12 +377,12 @@ export default function HomePage() {
   function handleHeaderSearch() {
     const query = headerQuery.trim();
     if (!query) {
-      showMessage("Digite um termo para buscar.");
+      toast.push("Digite um termo para buscar.", "error");
       return;
     }
     setActiveSection("assets");
     setActiveTab("assets");
-    showMessage(`Filtro rápido aplicado: ${query}`);
+    toast.push(`Filtro rápido aplicado: ${query}`, "info");
   }
 
   function handleLogout() {
@@ -401,7 +392,7 @@ export default function HomePage() {
 
   async function handleRefreshAll() {
     await Promise.all([refreshOperationalData(), refreshSummary()]);
-    showMessage("Dados atualizados.");
+    toast.push("Dados atualizados.", "success");
   }
 
   function renderMainContent() {
@@ -433,7 +424,7 @@ export default function HomePage() {
           onSave={(next) => {
             setUiSettings(next);
             saveUiSettings(next);
-            setActionMessage("Configurações aplicadas.");
+            toast.push("Configurações aplicadas.", "success");
           }}
         />
       );
@@ -569,7 +560,6 @@ export default function HomePage() {
                   onClick={() => {
                     setActiveSection("monitoring");
                     setActiveTab("monitoring");
-                    showMessage("Monitoramento aberto.");
                   }}
                   className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500"
                 >
@@ -578,7 +568,6 @@ export default function HomePage() {
                 <button
                   onClick={() => {
                     setActiveSection("settings");
-                    showMessage("Configurações abertas.");
                   }}
                   className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500"
                 >
@@ -659,7 +648,7 @@ export default function HomePage() {
 
               <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                 <span className="font-semibold text-slate-700">Status</span>
-                <span className="text-slate-500">{actionMessage || "Clique em Atualizar para recarregar os dados críticos."}</span>
+                <span className="text-slate-500">Clique em Atualizar para recarregar os dados críticos.</span>
               </div>
             </section>
           ) : null}
