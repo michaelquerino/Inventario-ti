@@ -12,6 +12,7 @@ import {
   type Asset,
   type AssetPayload,
 } from "@/lib/assets-api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type FormState = {
   asset_tag: string;
@@ -69,6 +70,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [compactLayout, setCompactLayout] = useState(true);
   const [viewOnly, setViewOnly] = useState(false);
+  const [ativoParaExcluir, setAtivoParaExcluir] = useState<Asset | null>(null);
 
   async function loadAssets() {
     setLoading(true);
@@ -187,12 +189,18 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!window.confirm("Excluir este ativo?")) return;
+  function handleDelete(asset: Asset) {
+    setAtivoParaExcluir(asset);
+  }
+
+  async function handleConfirmarExclusao() {
+    if (!ativoParaExcluir) return;
+    const id = ativoParaExcluir.id;
     setDeletingId(id);
     setError("");
     try {
       await deleteAsset(id);
+      setAtivoParaExcluir(null);
       await loadAssets();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao excluir ativo");
@@ -361,7 +369,7 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => handleDelete(asset.id)}
+                        onClick={() => handleDelete(asset)}
                         disabled={deletingId === asset.id}
                         title={deletingId === asset.id ? "Excluindo..." : "Excluir"}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
@@ -495,6 +503,24 @@ export function AssetsManager({ externalQuery = "" }: AssetsManagerProps) {
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={ativoParaExcluir !== null}
+        tone="danger"
+        title="Excluir ativo?"
+        confirmLabel={deletingId !== null ? "Excluindo..." : "Sim, excluir"}
+        confirming={deletingId !== null}
+        onCancel={() => setAtivoParaExcluir(null)}
+        onConfirm={() => void handleConfirmarExclusao()}
+        description={
+          ativoParaExcluir ? (
+            <p>
+              O ativo <strong>{ativoParaExcluir.name}</strong> ({ativoParaExcluir.asset_tag}) será excluído
+              permanentemente. Essa ação não pode ser desfeita.
+            </p>
+          ) : null
+        }
+      />
     </div>
   );
 }

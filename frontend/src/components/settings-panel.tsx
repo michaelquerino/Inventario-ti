@@ -4,6 +4,7 @@ import { DatabaseBackup, Download, Save, Upload } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSingleAdminMode } from "@/lib/auth-config";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   downloadBackup,
   exportBackupNow,
@@ -71,6 +72,7 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
   const [executandoBackup, setExecutandoBackup] = useState(false);
   const [exportandoBackup, setExportandoBackup] = useState(false);
   const [importandoBackup, setImportandoBackup] = useState(false);
+  const [arquivoParaImportar, setArquivoParaImportar] = useState<File | null>(null);
   const [backupErro, setBackupErro] = useState("");
   const [backupMensagem, setBackupMensagem] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -141,17 +143,16 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
     importInputRef.current?.click();
   }
 
-  async function handleImportFileSelected(event: ChangeEvent<HTMLInputElement>) {
+  function handleImportFileSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    setArquivoParaImportar(file);
+  }
 
-    const confirmado = window.confirm(
-      "Isso vai SOBRESCREVER os dados atuais do sistema com o conteúdo do backup selecionado. " +
-        "Um backup de segurança do estado atual é feito automaticamente antes, mas a ação não pode ser desfeita " +
-        "sem restaurar esse backup de segurança manualmente. Deseja continuar?",
-    );
-    if (!confirmado) return;
+  async function handleConfirmarImportacao() {
+    if (!arquivoParaImportar) return;
+    const file = arquivoParaImportar;
 
     setBackupErro("");
     setBackupMensagem("");
@@ -163,6 +164,7 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
       } else {
         setBackupMensagem(`Backup importado com sucesso (${resultado.restored.join(", ")}).`);
       }
+      setArquivoParaImportar(null);
       await refreshBackups();
     } catch (err) {
       setBackupErro(err instanceof Error ? err.message : "Erro ao importar backup");
@@ -333,7 +335,7 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
                 type="file"
                 accept=".zip"
                 className="hidden"
-                onChange={(event) => void handleImportFileSelected(event)}
+                onChange={handleImportFileSelected}
               />
             </div>
           </div>
@@ -442,6 +444,30 @@ export function SettingsPanel({ initialSettings, currentRole, onSave }: Settings
           ) : null}
         </>
       )}
+
+      <ConfirmDialog
+        open={arquivoParaImportar !== null}
+        tone="danger"
+        title="Restaurar backup?"
+        confirmLabel={importandoBackup ? "Importando..." : "Sim, sobrescrever e restaurar"}
+        confirming={importandoBackup}
+        onCancel={() => setArquivoParaImportar(null)}
+        onConfirm={() => void handleConfirmarImportacao()}
+        description={
+          arquivoParaImportar ? (
+            <div className="space-y-2">
+              <p>
+                Isso vai <strong>sobrescrever</strong> os dados atuais do sistema com o conteúdo de{" "}
+                <strong>{arquivoParaImportar.name}</strong>.
+              </p>
+              <p>
+                Um backup de segurança do estado atual é feito automaticamente antes, mas essa ação não pode ser
+                desfeita sem restaurar esse backup de segurança manualmente.
+              </p>
+            </div>
+          ) : null
+        }
+      />
     </section>
   );
 }
